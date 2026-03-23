@@ -34,12 +34,15 @@ jobs:
       - name: Run Ec1.py
         run: python Ec1.py
 
+      - name: Run Eclectica.py
+        run: python Eclectica.py
+
       - name: Commit updated CSV files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add eclectica_rsd_cash_history.csv eclectica-euro-cash_history.csv
+          git add eclectica_rsd_cash_history.csv eclectica-euro-cash_history.csv eclectica_master_history.csv
 
           git diff --cached --quiet || git commit -m "Update fund history CSV files"
           git push
