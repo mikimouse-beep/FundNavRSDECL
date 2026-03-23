@@ -26,7 +26,7 @@ jobs:
 
       - name: Install packages
         run: |
-          pip install requests beautifulsoup4
+          pip install requests beautifulsoup4 openpyxl
 
       - name: Run Ec.py
         run: python Ec.py
@@ -42,7 +42,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add eclectica_rsd_cash_history.csv eclectica-euro-cash_history.csv eclectica_master_history.csv
+          [ -f eclectica_rsd_cash_history.csv ] && git add eclectica_rsd_cash_history.csv
+          [ -f eclectica-euro-cash_history.csv ] && git add eclectica-euro-cash_history.csv
+          [ -f eclectica_master_history.csv ] && git add eclectica_master_history.csv
 
           git diff --cached --quiet || git commit -m "Update fund history CSV files"
           git push
