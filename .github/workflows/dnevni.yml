@@ -38,6 +38,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add eclectica_master_history.csv
-          git diff --cached --quiet || git commit -m "Update eclectica master history"
-          git push
+
+          if [ -f eclectica_master_history.csv ]; then
+            git add eclectica_master_history.csv
+            git diff --cached --quiet || git commit -m "Update eclectica master history"
+            git push
+          else
+            echo "CSV file not found, nothing to commit."
+          fi
