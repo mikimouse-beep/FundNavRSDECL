@@ -1,20 +1,43 @@
 name: Run python daily
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - run: python Ec.py
-      - run: python EC1.py
+      - name: Install packages
+        run: |
+          pip install requests beautifulsoup4 openpyxl
+
+      - name: Run Ec.py
+        run: python Ec.py
+
+      - name: Run Ec1.py
+        run: python Ec1.py
+
+      - name: Commit updated CSV
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add eclectica_master_history.csv
+          git diff --cached --quiet || git commit -m "Update eclectica master history"
+          git push
