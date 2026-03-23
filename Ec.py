@@ -5,7 +5,11 @@ import requests
 from bs4 import BeautifulSoup
 
 URL = "https://www.eclecticacapital.com/eclectica-rsd-cash-ucits-fund"
-CSV_PATH = r"C:\Users\Janežič\Desktop\MajdaKLIK\Eclectica\eclectica_rsd_cash_history.csv"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE_DIR, "eclectica_rsd_cash_history.csv")
+
+
 
 def parse_number(s: str) -> float:
     s = s.strip().replace(".", "").replace(",", ".")
