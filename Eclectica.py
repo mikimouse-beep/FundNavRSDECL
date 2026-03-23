@@ -8,7 +8,9 @@ import requests
 from bs4 import BeautifulSoup
 from openpyxl import load_workbook
 
-MASTER_CSV_PATH = r"C:\Users\Janežič\Desktop\MajdaKLIK\Eclectica\eclectica_master_history.csv"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MASTER_CSV_PATH = os.path.join(BASE_DIR, "eclectica_master_history.csv")
 
 FUNDS = [
     {
