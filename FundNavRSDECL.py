@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MASTER_CSV_PATH = os.path.join(BASE_DIR, "eclectica_master_history.csv")
+MASTER_CSV_PATH = os.path.join(BASE_DIR, "FundNavRSDECL_master_history.csv")
 
 FUNDS = [
     {
