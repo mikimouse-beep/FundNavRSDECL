@@ -127,7 +127,7 @@ def _fetch_rate_for_date(query_date):
     params = {
         "isSearchExecuted": "true",
         "Date": sr_date,
-        "ExchangeRateListTypeID": "1",
+        "ExchangeRateListTypeID": "3",
     }
 
     r = session.get(NBS_INDEX_BY_DATE_URL, params=params, headers=HEADERS, timeout=30)
