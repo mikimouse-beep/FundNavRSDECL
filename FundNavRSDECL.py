@@ -97,7 +97,6 @@ def _extract_rate_and_formed_date(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
 
-    # latinica ali cirilica
     formed_match = re.search(
         r"(?:FORMIRANA NA DAN|ФОРМИРАНА НА ДАН)\s+(\d{1,2}\.\d{1,2}\.\d{4})",
         text,
@@ -108,17 +107,20 @@ def _extract_rate_and_formed_date(html: str):
 
     formed_date = datetime.strptime(formed_match.group(1), "%d.%m.%Y").date()
 
-    # srednji kurs = samo en tečaj
-    rate_match = re.search(
-        r"\bEUR\b\s+978\s+.*?\s+1\s+(\d+,\d+)",
-        text,
-        flags=re.S
-    )
-    if not rate_match:
-        return None, None
+    tables = soup.find_all("table")
+    for table in tables:
+        rows = table.find_all("tr")
+        for row in rows:
+            cells = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
 
-    rate = float(rate_match.group(1).replace(",", "."))
-    return rate, formed_date
+            if len(cells) >= 5 and cells[0] == "EUR":
+                rate_text = cells[-1].replace(".", "").replace(",", ".")
+                try:
+                    return float(rate_text), formed_date
+                except ValueError:
+                    pass
+
+    return None, None
 
 
 def _fetch_rate_for_date(query_date):
