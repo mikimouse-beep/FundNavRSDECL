@@ -135,7 +135,6 @@ def _fetch_rate_for_date(query_date):
     r = session.get(NBS_INDEX_BY_DATE_URL, params=params, headers=HEADERS, timeout=30)
     r.raise_for_status()
 
-    # debug za lažje odkrivanje težav
     print("NBS request URL:", r.url)
 
     rate, formed_date = _extract_rate_and_formed_date(r.text)
@@ -214,9 +213,6 @@ def detect_delimiter(path: str) -> str:
 
 
 def append_if_new_master(row: dict):
-    exists = os.path.exists(MASTER_CSV_PATH)
-    existing_keys = set()
-
     fieldnames = [
         "date",
         "fund_name",
@@ -228,6 +224,11 @@ def append_if_new_master(row: dict):
         "vep_rsd",
         "aum_rsd",
     ]
+
+    rows = []
+    exists = os.path.exists(MASTER_CSV_PATH)
+    updated = False
+    new_key = (row["date"], row["fund_name"])
 
     if exists:
         delimiter = detect_delimiter(MASTER_CSV_PATH)
@@ -245,22 +246,36 @@ def append_if_new_master(row: dict):
                 return
 
             for r in reader:
-                key = (r.get("date", "").strip(), r.get("fund_name", "").strip())
-                if key[0] and key[1]:
-                    existing_keys.add(key)
+                existing_row = {k: r.get(k, "") for k in fieldnames}
+                existing_key = (
+                    existing_row.get("date", "").strip(),
+                    existing_row.get("fund_name", "").strip()
+                )
 
-    row_key = (row["date"], row["fund_name"])
-    if row_key in existing_keys:
-        print(f"{row['fund_name']} | {row['date']} že obstaja, nič ne dodam.")
-        return
+                if existing_key == new_key:
+                    rows.append(row)
+                    updated = True
+                else:
+                    rows.append(existing_row)
 
-    with open(MASTER_CSV_PATH, "a", newline="", encoding="utf-8-sig") as f:
+    if not updated:
+        rows.append(row)
+
+    rows.sort(key=lambda x: (x.get("date", ""), x.get("fund_name", "")))
+
+    tmp_path = MASTER_CSV_PATH + ".tmp"
+
+    with open(tmp_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
-        if not exists:
-            writer.writeheader()
-        writer.writerow(row)
+        writer.writeheader()
+        writer.writerows(rows)
 
-    print("Dodano:", row["fund_name"], row["date"])
+    os.replace(tmp_path, MASTER_CSV_PATH)
+
+    if updated:
+        print("Posodobljeno:", row["fund_name"], row["date"])
+    else:
+        print("Dodano:", row["fund_name"], row["date"])
 
 
 def main():
