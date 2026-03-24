@@ -4,7 +4,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
-URL = "https://www.eclecticacapital.com/eclectica-euro-cash-ucits-fund"
+URL = "https://www.eclecticacapital.com/ecl-euro-cash-ucits-fund"
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
