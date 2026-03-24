@@ -44,7 +44,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           [ -f ecl_rsd_cash_history.csv ] && git add ecl_rsd_cash_history.csv
-          [ -f ecl-euro-cash_history.csv ] && git add ecl-euro-cash_history.csv
+          [ -f ecl_euro_cash_history.csv ] && git add ecl_euro_cash_history.csv
           [ -f FundNavRSDECL_master_history.csv ] && git add FundNavRSDECL_master_history.csv
 
           git diff --cached --quiet || git commit -m "Update fund history CSV files"
