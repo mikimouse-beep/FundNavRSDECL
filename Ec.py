@@ -10,7 +10,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(BASE_DIR, "ecl_rsd_cash_history.csv")
 
 
-
 def parse_number(s: str) -> float:
     s = s.strip().replace(".", "").replace(",", ".")
     return float(s)
