@@ -23,7 +23,6 @@ FUNDS = [
     },
 ]
 
-# NBS "Na željeni dan"
 NBS_INDEX_BY_DATE_URL = "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/IndexByDate"
 
 session = requests.Session()
@@ -94,14 +93,7 @@ def fetch_fund_data(fund: dict) -> dict:
     }
 
 
-def _extract_middle_rate_and_formed_date(html: str):
-    """
-    Iz HTML strani NBS pobere:
-    - datum, za katerega je lista dejansko formirana
-    - EUR/RSD srednji tečaj iz vrstice EUR
-
-    Na NBS "Na željeni dan" obstaja tudi možnost "Srednji kurs".
-    """
+def _extract_rate_and_formed_date(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
 
@@ -115,8 +107,7 @@ def _extract_middle_rate_and_formed_date(html: str):
 
     formed_date = datetime.strptime(formed_match.group(1), "%d.%m.%Y").date()
 
-    # Primer vrstice na strani za srednji kurs:
-    # EUR 978 EMU 1 117,4368
+    # poberi prvi EUR tečaj v vrstici
     rate_match = re.search(
         r"\bEUR\b.*?\b978\b.*?\b1\b\s+(\d+,\d+)",
         text,
@@ -129,35 +120,28 @@ def _extract_middle_rate_and_formed_date(html: str):
     return rate, formed_date
 
 
-def _fetch_middle_rate_for_date(query_date):
-    """
-    Pošlje zahtevek na NBS 'Na željeni dan' za SREDNJI KURS.
-    Ključno: vrsta mora biti 'Srednji kurs', ne 'Za devize'.
-    """
+def _fetch_rate_for_date(query_date):
     sr_date = query_date.strftime("%d.%m.%Y.")
 
     params = {
         "isSearchExecuted": "true",
         "Date": sr_date,
-        # 3 = Srednji kurs
-        # Na strani so vrste: Za devize / Efektiva / Srednji kurs
-        "ExchangeRateListTypeID": "3",
+        "ExchangeRateListTypeID": "1",
     }
 
     r = session.get(NBS_INDEX_BY_DATE_URL, params=params, headers=HEADERS, timeout=30)
     r.raise_for_status()
 
-    return _extract_middle_rate_and_formed_date(r.text)
+    # debug za lažje odkrivanje težav
+    print("NBS request URL:", r.url)
+
+    rate, formed_date = _extract_rate_and_formed_date(r.text)
+    print("NBS parsed:", query_date.isoformat(), "->", rate, formed_date)
+
+    return rate, formed_date
 
 
 def fetch_eur_rsd_from_nbs(target_date: str, max_lookback_days: int = 10) -> float:
-    """
-    Vrne zgodovinski EUR/RSD srednji tečaj za target_date.
-    Če za ta datum ni objave (vikend/praznik), gre nazaj po dnevih,
-    dokler ne najde zadnjega razpoložljivega prejšnjega datuma.
-
-    NIKOLI ne sprejme poznejšega datuma od target_date.
-    """
     if target_date in _fx_cache:
         return _fx_cache[target_date]
 
@@ -172,26 +156,25 @@ def fetch_eur_rsd_from_nbs(target_date: str, max_lookback_days: int = 10) -> flo
             _fx_cache[target_date] = rate
             return rate
 
-        rate, formed_date = _fetch_middle_rate_for_date(d)
+        rate, formed_date = _fetch_rate_for_date(d)
 
         if rate is None or formed_date is None:
             continue
 
-        # sprejmi samo isti ali starejši datum
         if formed_date <= d:
             _fx_cache[formed_date.isoformat()] = rate
             _fx_cache[target_date] = rate
 
             if formed_date.isoformat() != target_date:
                 print(
-                    f"NBS middle-rate fallback za {target_date} -> "
-                    f"uporabljen {formed_date.isoformat()}: {rate}"
+                    f"NBS FX fallback za {target_date} -> uporabljen "
+                    f"{formed_date.isoformat()}: {rate}"
                 )
 
             return rate
 
     raise ValueError(
-        f"NBS srednjega tečaja EUR/RSD za datum {target_date} nisem našel "
+        f"NBS tečaja EUR/RSD za datum {target_date} nisem našel "
         f"(lookback {max_lookback_days} dni)."
     )
 
@@ -280,9 +263,16 @@ def append_if_new_master(row: dict):
 def main():
     for fund in FUNDS:
         try:
+            print(f"\n--- START {fund['fund_name']} ---")
             base_row = fetch_fund_data(fund)
+            print("BASE ROW:", base_row)
+
             full_row = enrich_with_fx(base_row)
+            print("FULL ROW:", full_row)
+
             append_if_new_master(full_row)
+            print(f"--- DONE {fund['fund_name']} ---")
+
         except Exception as e:
             print(f"NAPAKA pri skladu {fund['fund_name']}: {e}")
 
