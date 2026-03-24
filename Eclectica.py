@@ -1,12 +1,10 @@
 import csv
-import io
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from bs4 import BeautifulSoup
-from openpyxl import load_workbook
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,8 +23,10 @@ FUNDS = [
     },
 ]
 
-# Uradni NBS Excel vir za exchange rates
-NBS_XLSX_URL = "https://www.nbs.rs/export/sites/NBS_site/documents/statistika/ino_ekonomski_odnosi/SBEOI09.xlsx"
+NBS_DAILY_URL = "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/IndexByDate"
+
+session = requests.Session()
+_fx_cache = {}
 
 
 def parse_number(s: str) -> float:
@@ -40,7 +40,7 @@ def to_iso_date(sr_date: str) -> str:
 
 
 def fetch_fund_data(fund: dict) -> dict:
-    r = requests.get(fund["url"], timeout=30)
+    r = session.get(fund["url"], timeout=30)
     r.raise_for_status()
     html = r.text
 
@@ -52,9 +52,16 @@ def fetch_fund_data(fund: dict) -> dict:
     vep_block = kpis[0]
     aum_block = kpis[1]
 
-    date_text = vep_block.select_one(".fund-kpi-sub").get_text(" ", strip=True)
-    vep_text = vep_block.select_one(".fund-kpi-value").get_text(" ", strip=True)
-    aum_text = aum_block.select_one(".fund-kpi-value").get_text(" ", strip=True)
+    date_node = vep_block.select_one(".fund-kpi-sub")
+    vep_node = vep_block.select_one(".fund-kpi-value")
+    aum_node = aum_block.select_one(".fund-kpi-value")
+
+    if not date_node or not vep_node or not aum_node:
+        raise ValueError(f"Manjkajo KPI elementi za {fund['fund_name']}.")
+
+    date_text = date_node.get_text(" ", strip=True)
+    vep_text = vep_node.get_text(" ", strip=True)
+    aum_text = aum_node.get_text(" ", strip=True)
 
     date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", date_text)
     if not date_match:
@@ -70,7 +77,7 @@ def fetch_fund_data(fund: dict) -> dict:
 
     vep = parse_number(vep_match.group(1))
     aum = parse_number(aum_match.group(1))
-    units_est = aum / vep
+    units_est = aum / vep if vep else None
 
     return {
         "date": iso_date,
@@ -82,56 +89,68 @@ def fetch_fund_data(fund: dict) -> dict:
     }
 
 
-def normalize_excel_date(value):
-    if isinstance(value, datetime):
-        return value.date().isoformat()
+def _extract_eur_rsd_from_html(html: str) -> float | None:
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text("\n", strip=True)
 
-    if isinstance(value, str):
-        value = value.strip()
-
-        for fmt in ("%d.%m.%Y", "%d.%m.%Y.", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(value, fmt).date().isoformat()
-            except ValueError:
-                pass
+    # Poskus: EUR ... 1 ... 117,1234
+    m = re.search(r"\bEUR\b.*?\b1\b\s+(\d+,\d+)", text, flags=re.S)
+    if m:
+        return float(m.group(1).replace(",", "."))
 
     return None
 
 
-def fetch_eur_rsd_from_nbs(target_date: str) -> float:
+def fetch_eur_rsd_from_nbs(target_date: str, max_lookback_days: int = 10) -> float:
     """
-    Vrne uradni srednji tečaj EUR/RSD za podani datum v formatu YYYY-MM-DD.
-    Bere iz NBS webapp strani 'na željeni dan'.
+    Vrne uradni srednji tečaj EUR/RSD za podani datum.
+    Če za ta datum ni objave (vikend/praznik), gre nazaj po dnevih,
+    dokler ne najde zadnjega razpoložljivega tečaja.
     """
-    yyyy, mm, dd = target_date.split("-")
-    sr_date = f"{dd}.{mm}.{yyyy}"
+    if target_date in _fx_cache:
+        return _fx_cache[target_date]
 
-    url = "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/IndexByDate"
-    params = {
-        "isSearchExecuted": "true",
-        "SearchDate": sr_date,
-    }
+    base_date = datetime.strptime(target_date, "%Y-%m-%d").date()
 
-    r = requests.get(url, params=params, timeout=30)
-    r.raise_for_status()
+    for offset in range(max_lookback_days + 1):
+        d = base_date - timedelta(days=offset)
+        iso_date = d.isoformat()
 
-    html = r.text
-    soup = BeautifulSoup(html, "html.parser")
+        if iso_date in _fx_cache:
+            rate = _fx_cache[iso_date]
+            _fx_cache[target_date] = rate
+            return rate
 
-    text = soup.get_text("\n", strip=True)
+        sr_date = d.strftime("%d.%m.%Y")
+        params = {
+            "isSearchExecuted": "true",
+            "SearchDate": sr_date,
+        }
 
-    # Poskusi najti vrstico za EUR in tečaj za 1 enoto
-    m = re.search(r"\bEUR\b.*?\b1\b\s+(\d+,\d+)", text, flags=re.S)
-    if not m:
-        raise ValueError(f"NBS tečaja EUR/RSD za datum {target_date} nisem našel.")
+        r = session.get(NBS_DAILY_URL, params=params, timeout=30)
+        r.raise_for_status()
 
-    return float(m.group(1).replace(",", "."))
+        rate = _extract_eur_rsd_from_html(r.text)
+        if rate is not None:
+            _fx_cache[iso_date] = rate
+            _fx_cache[target_date] = rate
+
+            if offset > 0:
+                print(f"NBS FX fallback za {target_date} -> uporabljen {iso_date}: {rate}")
+
+            return rate
+
+    raise ValueError(
+        f"NBS tečaja EUR/RSD za datum {target_date} nisem našel "
+        f"(lookback {max_lookback_days} dni)."
+    )
+
 
 def enrich_with_fx(row: dict) -> dict:
     """
     Doda FX in RSD protivrednosti.
     Za RSD sklad pusti EUR/RSD prazen, vep_rsd in aum_rsd pa enaka originalu.
-    Za EUR sklad potegne NBS EUR/RSD in preračuna.
+    Za EUR sklad potegne NBS EUR/RSD na isti dan oziroma zadnji razpoložljivi prejšnji dan.
     """
     out = dict(row)
 
@@ -139,11 +158,13 @@ def enrich_with_fx(row: dict) -> dict:
         out["eur_rsd_nbs"] = ""
         out["vep_rsd"] = row["vep"]
         out["aum_rsd"] = row["aum"]
+
     elif row["fund_ccy"] == "EUR":
         eur_rsd = fetch_eur_rsd_from_nbs(row["date"])
         out["eur_rsd_nbs"] = eur_rsd
         out["vep_rsd"] = row["vep"] * eur_rsd
         out["aum_rsd"] = row["aum"] * eur_rsd
+
     else:
         raise ValueError(f"Neznana valuta sklada: {row['fund_ccy']}")
 
@@ -153,6 +174,7 @@ def enrich_with_fx(row: dict) -> dict:
 def detect_delimiter(path: str) -> str:
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
         first_line = f.readline()
+
     if ";" in first_line:
         return ";"
     if "," in first_line:
