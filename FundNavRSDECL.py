@@ -23,7 +23,8 @@ FUNDS = [
     },
 ]
 
-NBS_DAILY_URL = "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/IndexByDate"
+# NBS "Na željeni dan"
+NBS_INDEX_BY_DATE_URL = "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/IndexByDate"
 
 session = requests.Session()
 _fx_cache = {}
@@ -93,17 +94,13 @@ def fetch_fund_data(fund: dict) -> dict:
     }
 
 
-def _extract_eur_rsd_and_formed_date(html: str):
+def _extract_middle_rate_and_formed_date(html: str):
     """
     Iz HTML strani NBS pobere:
     - datum, za katerega je lista dejansko formirana
-    - EUR/RSD tečaj iz vrstice EUR
+    - EUR/RSD srednji tečaj iz vrstice EUR
 
-    Opomba:
-    Stran "Za devize" kaže kupovni/prodajni tečaj, ne klasičnega "srednjega".
-    Tukaj zaradi kompatibilnosti vzamemo prvi številčni tečaj iz EUR vrstice
-    (enako kot si prej v praksi že delala z regex logiko), vendar s pravilno
-    validacijo datuma.
+    Na NBS "Na željeni dan" obstaja tudi možnost "Srednji kurs".
     """
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
@@ -113,22 +110,18 @@ def _extract_eur_rsd_and_formed_date(html: str):
         text,
         flags=re.I
     )
-
     if not formed_match:
         return None, None
 
-    formed_sr = formed_match.group(1)
-    formed_date = datetime.strptime(formed_sr, "%d.%m.%Y").date()
+    formed_date = datetime.strptime(formed_match.group(1), "%d.%m.%Y").date()
 
-    # Pobere prvi tečaj iz EUR vrstice
-    # primer vrstice:
-    # EUR 978 EMU 1 117,0840 117,7886
+    # Primer vrstice na strani za srednji kurs:
+    # EUR 978 EMU 1 117,4368
     rate_match = re.search(
         r"\bEUR\b.*?\b978\b.*?\b1\b\s+(\d+,\d+)",
         text,
         flags=re.S
     )
-
     if not rate_match:
         return None, None
 
@@ -136,14 +129,34 @@ def _extract_eur_rsd_and_formed_date(html: str):
     return rate, formed_date
 
 
+def _fetch_middle_rate_for_date(query_date):
+    """
+    Pošlje zahtevek na NBS 'Na željeni dan' za SREDNJI KURS.
+    Ključno: vrsta mora biti 'Srednji kurs', ne 'Za devize'.
+    """
+    sr_date = query_date.strftime("%d.%m.%Y.")
+
+    params = {
+        "isSearchExecuted": "true",
+        "Date": sr_date,
+        # 3 = Srednji kurs
+        # Na strani so vrste: Za devize / Efektiva / Srednji kurs
+        "ExchangeRateListTypeID": "3",
+    }
+
+    r = session.get(NBS_INDEX_BY_DATE_URL, params=params, headers=HEADERS, timeout=30)
+    r.raise_for_status()
+
+    return _extract_middle_rate_and_formed_date(r.text)
+
+
 def fetch_eur_rsd_from_nbs(target_date: str, max_lookback_days: int = 10) -> float:
     """
-    Vrne EUR/RSD za ciljni datum.
+    Vrne zgodovinski EUR/RSD srednji tečaj za target_date.
     Če za ta datum ni objave (vikend/praznik), gre nazaj po dnevih,
     dokler ne najde zadnjega razpoložljivega prejšnjega datuma.
 
-    Ključno:
-    - NIKOLI ne sprejme poznejšega datuma od target_date
+    NIKOLI ne sprejme poznejšega datuma od target_date.
     """
     if target_date in _fx_cache:
         return _fx_cache[target_date]
@@ -159,46 +172,31 @@ def fetch_eur_rsd_from_nbs(target_date: str, max_lookback_days: int = 10) -> flo
             _fx_cache[target_date] = rate
             return rate
 
-        sr_date = d.strftime("%d.%m.%Y.")
-        params = {
-            "isSearchExecuted": "true",
-            "Date": sr_date,
-            "ExchangeRateListTypeID": "1",
-        }
-
-        r = session.get(NBS_DAILY_URL, params=params, headers=HEADERS, timeout=30)
-        r.raise_for_status()
-
-        rate, formed_date = _extract_eur_rsd_and_formed_date(r.text)
+        rate, formed_date = _fetch_middle_rate_for_date(d)
 
         if rate is None or formed_date is None:
             continue
 
-        # sprejmi samo če je vrnjeni datum isti ali starejši od iskanega dne
+        # sprejmi samo isti ali starejši datum
         if formed_date <= d:
-            _fx_cache[iso_date] = rate
+            _fx_cache[formed_date.isoformat()] = rate
             _fx_cache[target_date] = rate
 
             if formed_date.isoformat() != target_date:
                 print(
-                    f"NBS FX fallback za {target_date} -> uporabljen "
-                    f"{formed_date.isoformat()}: {rate}"
+                    f"NBS middle-rate fallback za {target_date} -> "
+                    f"uporabljen {formed_date.isoformat()}: {rate}"
                 )
 
             return rate
 
     raise ValueError(
-        f"NBS tečaja EUR/RSD za datum {target_date} nisem našel "
+        f"NBS srednjega tečaja EUR/RSD za datum {target_date} nisem našel "
         f"(lookback {max_lookback_days} dni)."
     )
 
 
 def enrich_with_fx(row: dict) -> dict:
-    """
-    Doda FX in RSD protivrednosti.
-    Za RSD sklad pusti EUR/RSD prazen, vep_rsd in aum_rsd pa enaka originalu.
-    Za EUR sklad potegne NBS EUR/RSD na isti dan oziroma zadnji razpoložljivi prejšnji dan.
-    """
     out = dict(row)
 
     if row["fund_ccy"] == "RSD":
