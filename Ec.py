@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 URL = "https://www.eclecticacapital.com/eclectica-rsd-cash-ucits-fund"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_PATH = os.path.join(BASE_DIR, "eclectica_rsd_cash_history.csv")
+CSV_PATH = os.path.join(BASE_DIR, "ecl_rsd_cash_history.csv")
 
 
 
