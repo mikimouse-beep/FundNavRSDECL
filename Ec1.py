@@ -8,7 +8,7 @@ URL = "https://www.eclecticacapital.com/eclectica-euro-cash-ucits-fund"
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_PATH = os.path.join(BASE_DIR, "ecl-euro-cash_history.csv")
+CSV_PATH = os.path.join(BASE_DIR, "ecl_euro_cash_history.csv")
 
 def parse_number(s: str) -> float:
     s = s.strip().replace(".", "").replace(",", ".")
