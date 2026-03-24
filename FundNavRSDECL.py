@@ -97,9 +97,9 @@ def _extract_rate_and_formed_date(html: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
 
-    # sprejmi latinico ALI cirilico
+    # latinica ali cirilica
     formed_match = re.search(
-        r"(?:FORMIRANA NA DAN|ФОРМИРАНА НА ДАН)\s+(\d{1,2}\.\d{1,2}\.\d{4})\.",
+        r"(?:FORMIRANA NA DAN|ФОРМИРАНА НА ДАН)\s+(\d{1,2}\.\d{1,2}\.\d{4})",
         text,
         flags=re.I
     )
@@ -108,9 +108,7 @@ def _extract_rate_and_formed_date(html: str):
 
     formed_date = datetime.strptime(formed_match.group(1), "%d.%m.%Y").date()
 
-    # EUR vrstica na strani izgleda npr.:
-    # EUR 978 ЕМУ 1 117,0840 117,7886
-    # Zato ne iščemo "EMU", ampak samo EUR + 978 + 1 + prvi tečaj
+    # srednji kurs = samo en tečaj
     rate_match = re.search(
         r"\bEUR\b\s+978\s+.*?\s+1\s+(\d+,\d+)",
         text,
