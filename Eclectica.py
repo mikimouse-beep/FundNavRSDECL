@@ -76,9 +76,9 @@ def fetch_fund_data(fund: dict) -> dict:
         "date": iso_date,
         "fund_name": fund["fund_name"],
         "fund_ccy": fund["fund_ccy"],
-        "vep": round(vep, 5),
-        "aum": round(aum, 2),
-        "units_est": round(units_est, 2),
+        "vep": vep,
+        "aum": aum,
+        "units_est": units_est,
     }
 
 
