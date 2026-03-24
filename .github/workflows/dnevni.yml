@@ -34,8 +34,9 @@ jobs:
       - name: Run Ec1.py
         run: python Ec1.py
 
-      - name: Run Eclectica.py
-        run: python Eclectica.py
+      - name: Run FundNavRSDECL.py
+        run: python FundNavRSDECL.py
+
 
       - name: Commit updated CSV files
         run: |
