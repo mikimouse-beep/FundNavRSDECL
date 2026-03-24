@@ -12,12 +12,12 @@ MASTER_CSV_PATH = os.path.join(BASE_DIR, "FundNavRSDECL_master_history.csv")
 
 FUNDS = [
     {
-        "fund_name": "Eclectica RSD Cash UCITS Fund",
+        "fund_name": "ECLECTICA RSD CASH UCITS",
         "fund_ccy": "RSD",
         "url": "https://www.eclecticacapital.com/eclectica-rsd-cash-ucits-fund",
     },
     {
-        "fund_name": "Eclectica Euro Cash UCITS Fund",
+        "fund_name": "ECLECTICA EURO CASH UCITS",
         "fund_ccy": "EUR",
         "url": "https://www.eclecticacapital.com/eclectica-euro-cash-ucits-fund",
     },
