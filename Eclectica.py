@@ -137,13 +137,13 @@ def enrich_with_fx(row: dict) -> dict:
 
     if row["fund_ccy"] == "RSD":
         out["eur_rsd_nbs"] = ""
-        out["vep_rsd"] = round(row["vep"], 5)
-        out["aum_rsd"] = round(row["aum"], 2)
+        out["vep_rsd"] = row["vep"]
+        out["aum_rsd"] = row["aum"]
     elif row["fund_ccy"] == "EUR":
         eur_rsd = fetch_eur_rsd_from_nbs(row["date"])
-        out["eur_rsd_nbs"] = round(eur_rsd, 6)
-        out["vep_rsd"] = round(row["vep"] * eur_rsd, 5)
-        out["aum_rsd"] = round(row["aum"] * eur_rsd, 2)
+        out["eur_rsd_nbs"] = eur_rsd
+        out["vep_rsd"] = row["vep"] * eur_rsd
+        out["aum_rsd"] = row["aum"] * eur_rsd
     else:
         raise ValueError(f"Neznana valuta sklada: {row['fund_ccy']}")
 
