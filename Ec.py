@@ -51,9 +51,9 @@ def fetch_data():
 
     return {
         "date": iso_date,
-        "vep_rsd": round(vep, 5),
-        "aum_rsd": round(aum, 2),
-        "units_est": round(units_est, 2),
+        "vep_rsd": vep,
+        "aum_rsd": aum,
+        "units_est": units_est,
     }
 
 def append_if_new(row):
