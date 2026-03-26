@@ -2,7 +2,7 @@ name: Watchdog
 
 on:
   schedule:
-    - cron: '0 7 * * *'
+    - cron: '0 17 * * *'
   workflow_dispatch:
 
 jobs:
@@ -40,6 +40,6 @@ jobs:
           username: ${{ secrets.MAIL_USER }}
           password: ${{ secrets.MAIL_PASS }}
           subject: "GitHub cron se danes ni izvedel"
-          to: TVOJ_GMAIL@gmail.com
-          from: TVOJ_GMAIL@gmail.com
+          to: majda.janezic@gmail.com
+          from: majda.janezic@gmail.com
           body: "Daily workflow danes ni osvežil podatkov."
