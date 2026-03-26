@@ -31,7 +31,7 @@ jobs:
           fi
 
       - name: Send mail
-        if: always()
+        if: env.STALE == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
