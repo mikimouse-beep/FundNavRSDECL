@@ -37,6 +37,8 @@ jobs:
       - name: Run FundNavRSDECL.py
         run: python FundNavRSDECL.py
 
+      - name: Save refresh timestamp
+        run: date +%s > last_run.txt
 
       - name: Commit updated CSV files
         run: |
@@ -46,6 +48,7 @@ jobs:
           [ -f ecl_rsd_cash_history.csv ] && git add ecl_rsd_cash_history.csv
           [ -f ecl_euro_cash_history.csv ] && git add ecl_euro_cash_history.csv
           [ -f FundNavRSDECL_master_history.csv ] && git add FundNavRSDECL_master_history.csv
+          git add last_run.txt
 
           git diff --cached --quiet || git commit -m "Update fund history CSV files"
           git push
