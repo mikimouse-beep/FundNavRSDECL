@@ -27,19 +27,24 @@ jobs:
       - name: Install packages
         run: pip install requests beautifulsoup4 openpyxl
 
-      # 🔁 retry funkcija
       - name: Run FundNavRSDECL.py (retry 3x)
         run: |
           for i in 1 2 3; do
             echo "Attempt $i for FundNavRSDECL.py"
-            python FundNavRSDECL.py && break
-            echo "Failed... retrying in 60s"
-            sleep 60
+            if python FundNavRSDECL.py; then
+              echo "FundNavRSDECL.py succeeded on attempt $i"
+              break
+            fi
+
+            if [ "$i" -lt 3 ]; then
+              echo "Failed... retrying in 60s"
+              sleep 60
+            else
+              echo "FundNavRSDECL.py failed after 3 attempts"
+              exit 1
+            fi
           done
 
-          python FundNavRSDECL.py || exit 1
-
-      # ✅ samo če vse uspe
       - name: Save refresh timestamp
         if: success()
         run: date +%s > last_run.txt
@@ -50,7 +55,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # samo en file (kot želiš)
           [ -f FundNavRSDECL_master_history.csv ] && git add FundNavRSDECL_master_history.csv
           git add last_run.txt
 
