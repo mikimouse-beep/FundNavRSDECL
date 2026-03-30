@@ -25,30 +25,34 @@ jobs:
           python-version: '3.11'
 
       - name: Install packages
+        run: pip install requests beautifulsoup4 openpyxl
+
+      # 🔁 retry funkcija
+      - name: Run FundNavRSDECL.py (retry 3x)
         run: |
-          pip install requests beautifulsoup4 openpyxl
+          for i in 1 2 3; do
+            echo "Attempt $i for FundNavRSDECL.py"
+            python FundNavRSDECL.py && break
+            echo "Failed... retrying in 60s"
+            sleep 60
+          done
 
-      - name: Run Ec.py
-        run: python Ec.py
+          python FundNavRSDECL.py || exit 1
 
-      - name: Run Ec1.py
-        run: python Ec1.py
-
-      - name: Run FundNavRSDECL.py
-        run: python FundNavRSDECL.py
-
+      # ✅ samo če vse uspe
       - name: Save refresh timestamp
+        if: success()
         run: date +%s > last_run.txt
 
-      - name: Commit updated CSV files
+      - name: Commit updated CSV file
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          [ -f ecl_rsd_cash_history.csv ] && git add ecl_rsd_cash_history.csv
-          [ -f ecl_euro_cash_history.csv ] && git add ecl_euro_cash_history.csv
+          # samo en file (kot želiš)
           [ -f FundNavRSDECL_master_history.csv ] && git add FundNavRSDECL_master_history.csv
           git add last_run.txt
 
-          git diff --cached --quiet || git commit -m "Update fund history CSV files"
+          git diff --cached --quiet || git commit -m "Update fund history"
           git push
