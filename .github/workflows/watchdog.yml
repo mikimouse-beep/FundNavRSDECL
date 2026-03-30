@@ -5,6 +5,10 @@ on:
     - cron: '0 17 * * *'
   workflow_dispatch:
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -14,6 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check last run
+        id: check
         run: |
           if [ ! -f last_run.txt ]; then
             echo "STALE=true" >> $GITHUB_ENV
@@ -28,6 +33,44 @@ jobs:
 
           if [ $DIFF -gt 86400 ]; then
             echo "STALE=true" >> $GITHUB_ENV
+          else
+            echo "STALE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Retry main workflow
+        if: env.STALE == 'true'
+        run: |
+          echo "Retrying dnevni.yml workflow..."
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/dnevni.yml/dispatches \
+            -d '{"ref":"main"}'
+
+      - name: Wait for retry to finish
+        if: env.STALE == 'true'
+        run: |
+          echo "Waiting 5 minutes..."
+          sleep 300
+
+      - name: Re-check after retry
+        if: env.STALE == 'true'
+        run: |
+          if [ ! -f last_run.txt ]; then
+            echo "STALE=true" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          NOW=$(date +%s)
+          LAST=$(cat last_run.txt)
+          DIFF=$((NOW-LAST))
+
+          echo "After retry - seconds since last run: $DIFF"
+
+          if [ $DIFF -gt 86400 ]; then
+            echo "STALE=true" >> $GITHUB_ENV
+          else
+            echo "STALE=false" >> $GITHUB_ENV
           fi
 
       - name: Send mail
@@ -42,4 +85,6 @@ jobs:
           subject: "GitHub cron se danes ni izvedel"
           to: majda.janezic@gmail.com
           from: majda.janezic@gmail.com
-          body: "Daily workflow danes ni osvežil podatkov."
+          body: |
+            Daily workflow se ni izvedel niti po ponovnem poskusu.
+            Preveri GitHub Actions loge.
