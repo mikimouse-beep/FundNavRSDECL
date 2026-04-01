@@ -2,7 +2,7 @@ name: Watchdog
 
 on:
   schedule:
-    - cron: '0 17 * * *'
+    - cron: '0 13 * * *'
   workflow_dispatch:
 
 permissions:
