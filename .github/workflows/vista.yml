@@ -1,0 +1,63 @@
+name: Run Vista daily
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  schedule:
+    - cron: '15 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-vista:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install packages
+        run: |
+          pip install pandas playwright
+          playwright install --with-deps chromium
+
+      - name: Run vista.py
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i for vista.py"
+
+            if python vista.py; then
+              echo "vista.py succeeded on attempt $i"
+              break
+            fi
+
+            if [ "$i" -lt 3 ]; then
+              echo "Failed... retrying in 60s"
+              sleep 60
+            else
+              echo "vista.py failed after 3 attempts"
+              exit 1
+            fi
+          done
+
+      - name: Commit vista.csv
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add vista.csv
+
+          if git diff --cached --quiet; then
+            echo "No changes in vista.csv"
+          else
+            git commit -m "Update Vista data"
+            git push
+          fi
