@@ -1,3 +1,4 @@
+```python
 import os
 
 import pandas as pd
@@ -84,22 +85,44 @@ def fetch_vista_all_pages(url, sklad):
 
         all_rows = read_rows()
 
+        # Paginacija s številčnimi gumbi
         while True:
-            next_button = page.query_selector(
-                "a.paginate_button.next:not(.disabled)"
+            buttons = page.query_selector_all(
+                "a.paginate_button:not(.previous):not(.next)"
             )
 
-            if not next_button:
+            if not buttons:
                 break
 
-            next_button.click()
-            page.wait_for_timeout(800)
+            current_btn = page.query_selector(
+                "a.paginate_button.current"
+            )
+
+            current_page = (
+                current_btn.inner_text().strip()
+                if current_btn
+                else "1"
+            )
+
+            last_page = buttons[-1].inner_text().strip()
+
+            if current_page == last_page:
+                break
+
+            next_index = None
+
+            for i, btn in enumerate(buttons):
+                if btn.inner_text().strip() == current_page:
+                    next_index = i + 1
+                    break
+
+            if next_index is None or next_index >= len(buttons):
+                break
+
+            buttons[next_index].click()
+            page.wait_for_timeout(600)
 
             new_rows = read_rows()
-
-            if not new_rows:
-                break
-
             all_rows.extend(new_rows)
 
         browser.close()
@@ -177,9 +200,7 @@ def fetch_vista_all_pages(url, sklad):
         "Post_Date"
     )
 
-    print(
-        f"Prebranih vrstic: {len(df)}"
-    )
+    print(f"Prebranih vrstic: {len(df)}")
     print(f"--- DONE {sklad} ---")
 
     return df
@@ -223,9 +244,7 @@ def save_csv(df):
     print()
     print("CSV shranjen:")
     print(CSV_PATH)
-    print(
-        f"Skupaj vrstic: {len(df)}"
-    )
+    print(f"Skupaj vrstic: {len(df)}")
 
 
 def main():
@@ -247,3 +266,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
