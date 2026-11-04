@@ -3,7 +3,7 @@ name: Run UniCredit daily
 on:
   schedule:
     # Vsak dan ob 06:23 UTC (07:23 po slovenskem zimskem času)
-    - cron: "23 6 * * *"
+    - cron: '0 4 * * *'
   workflow_dispatch:   # omogoča ročni zagon z gumbom "Run workflow"
 
 permissions:
