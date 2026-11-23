@@ -28,10 +28,16 @@ FUNDS = [
     },
 ]
 
+# Valute, za katere iščemo tečaj na NBS tečajnici, in stolpec v CSV, kamor se tečaj zapiše
+FX_COLUMNS = {
+    "EUR": "eur_rsd_nbs",
+    "USD": "usd_rsd_nbs",
+}
+
 NBS_INDEX_BY_DATE_URL = "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/IndexByDate"
 
 session = requests.Session()
-_fx_cache = {}
+_fx_cache = {}  # ključ: (valuta, iso_datum)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
@@ -56,7 +62,7 @@ def fetch_fund_data(fund: dict) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     kpis = soup.select(".fund-kpi")
     if len(kpis) < 2:
-        raise ValueError(f"KPI blokov nisem našel za {fund['fund_name']}.")
+        raise ValueError(f"KPI blokov nisem našel za {fund['fund_name']} (najdenih: {len(kpis)}).")
 
     vep_block = kpis[0]
     aum_block = kpis[1]
@@ -74,12 +80,12 @@ def fetch_fund_data(fund: dict) -> dict:
 
     date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", date_text)
     if not date_match:
-        raise ValueError(f"Datuma nisem našel za {fund['fund_name']}.")
+        raise ValueError(f"Datuma nisem našel za {fund['fund_name']}: {date_text!r}")
 
     vep_match = re.search(r"([\d\.,]+)", vep_text)
     aum_match = re.search(r"([\d\.,]+)", aum_text)
     if not vep_match or not aum_match:
-        raise ValueError(f"VEP ali AUM ni bil najden za {fund['fund_name']}.")
+        raise ValueError(f"VEP ali AUM ni bil najden za {fund['fund_name']}: {vep_text!r} / {aum_text!r}")
 
     sr_date = date_match.group(1)
     iso_date = to_iso_date(sr_date)
@@ -98,7 +104,7 @@ def fetch_fund_data(fund: dict) -> dict:
     }
 
 
-def _extract_rate_and_formed_date(html: str):
+def _extract_rate_and_formed_date(html: str, ccy: str):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
 
@@ -118,7 +124,7 @@ def _extract_rate_and_formed_date(html: str):
         for row in rows:
             cells = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
 
-            if len(cells) >= 5 and cells[0] == "EUR":
+            if len(cells) >= 5 and cells[0] == ccy:
                 rate_text = cells[-1].replace(".", "").replace(",", ".")
                 try:
                     return float(rate_text), formed_date
@@ -128,7 +134,7 @@ def _extract_rate_and_formed_date(html: str):
     return None, None
 
 
-def _fetch_rate_for_date(query_date):
+def _fetch_rate_for_date(query_date, ccy: str):
     sr_date = query_date.strftime("%d.%m.%Y.")
 
     params = {
@@ -142,66 +148,75 @@ def _fetch_rate_for_date(query_date):
 
     print("NBS request URL:", r.url)
 
-    rate, formed_date = _extract_rate_and_formed_date(r.text)
-    print("NBS parsed:", query_date.isoformat(), "->", rate, formed_date)
+    rate, formed_date = _extract_rate_and_formed_date(r.text, ccy)
+    print(f"NBS parsed {ccy}:", query_date.isoformat(), "->", rate, formed_date)
 
     return rate, formed_date
 
 
-def fetch_eur_rsd_from_nbs(target_date: str, max_lookback_days: int = 10) -> float:
-    if target_date in _fx_cache:
-        return _fx_cache[target_date]
+def fetch_rsd_rate_from_nbs(ccy: str, target_date: str, max_lookback_days: int = 10) -> float:
+    target_key = (ccy, target_date)
+    if target_key in _fx_cache:
+        return _fx_cache[target_key]
 
     base_date = datetime.strptime(target_date, "%Y-%m-%d").date()
 
     for offset in range(max_lookback_days + 1):
         d = base_date - timedelta(days=offset)
-        iso_date = d.isoformat()
+        key = (ccy, d.isoformat())
 
-        if iso_date in _fx_cache:
-            rate = _fx_cache[iso_date]
-            _fx_cache[target_date] = rate
+        if key in _fx_cache:
+            rate = _fx_cache[key]
+            _fx_cache[target_key] = rate
             return rate
 
-        rate, formed_date = _fetch_rate_for_date(d)
+        rate, formed_date = _fetch_rate_for_date(d, ccy)
 
         if rate is None or formed_date is None:
             continue
 
         if formed_date <= d:
-            _fx_cache[formed_date.isoformat()] = rate
-            _fx_cache[target_date] = rate
+            _fx_cache[(ccy, formed_date.isoformat())] = rate
+            _fx_cache[target_key] = rate
 
             if formed_date.isoformat() != target_date:
                 print(
-                    f"NBS FX fallback za {target_date} -> uporabljen "
+                    f"NBS FX fallback {ccy} za {target_date} -> uporabljen "
                     f"{formed_date.isoformat()}: {rate}"
                 )
 
             return rate
 
     raise ValueError(
-        f"NBS tečaja EUR/RSD za datum {target_date} nisem našel "
+        f"NBS tečaja {ccy}/RSD za datum {target_date} nisem našel "
         f"(lookback {max_lookback_days} dni)."
     )
 
 
+def fetch_eur_rsd_from_nbs(target_date: str, max_lookback_days: int = 10) -> float:
+    # ohranjeno zaradi združljivosti
+    return fetch_rsd_rate_from_nbs("EUR", target_date, max_lookback_days)
+
+
 def enrich_with_fx(row: dict) -> dict:
     out = dict(row)
+    ccy = row["fund_ccy"]
 
-    if row["fund_ccy"] == "RSD":
-        out["eur_rsd_nbs"] = ""
+    for col in FX_COLUMNS.values():
+        out[col] = ""
+
+    if ccy == "RSD":
         out["vep_rsd"] = row["vep"]
         out["aum_rsd"] = row["aum"]
 
-    elif row["fund_ccy"] == "EUR":
-        eur_rsd = fetch_eur_rsd_from_nbs(row["date"])
-        out["eur_rsd_nbs"] = eur_rsd
-        out["vep_rsd"] = row["vep"] * eur_rsd
-        out["aum_rsd"] = row["aum"] * eur_rsd
+    elif ccy in FX_COLUMNS:
+        rate = fetch_rsd_rate_from_nbs(ccy, row["date"])
+        out[FX_COLUMNS[ccy]] = rate
+        out["vep_rsd"] = row["vep"] * rate
+        out["aum_rsd"] = row["aum"] * rate
 
     else:
-        raise ValueError(f"Neznana valuta sklada: {row['fund_ccy']}")
+        raise ValueError(f"Neznana valuta sklada: {ccy}")
 
     return out
 
@@ -226,6 +241,7 @@ def append_if_new_master(row: dict):
         "aum",
         "units_est",
         "eur_rsd_nbs",
+        "usd_rsd_nbs",
         "vep_rsd",
         "aum_rsd",
     ]
@@ -242,7 +258,7 @@ def append_if_new_master(row: dict):
             reader = csv.DictReader(f, delimiter=delimiter)
 
             if reader.fieldnames:
-                reader.fieldnames = [name.lstrip("\ufeff").strip() for name in reader.fieldnames]
+                reader.fieldnames = [name.lstrip("﻿").strip() for name in reader.fieldnames]
 
             if not reader.fieldnames or "date" not in reader.fieldnames or "fund_name" not in reader.fieldnames:
                 print("NAPAKA: master CSV header ni pravilen.")
@@ -251,7 +267,7 @@ def append_if_new_master(row: dict):
                 return
 
             for r in reader:
-                existing_row = {k: r.get(k, "") for k in fieldnames}
+                existing_row = {k: (r.get(k) or "") for k in fieldnames}
                 existing_key = (
                     existing_row.get("date", "").strip(),
                     existing_row.get("fund_name", "").strip()
@@ -271,7 +287,7 @@ def append_if_new_master(row: dict):
     tmp_path = MASTER_CSV_PATH + ".tmp"
 
     with open(tmp_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";", extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
 
