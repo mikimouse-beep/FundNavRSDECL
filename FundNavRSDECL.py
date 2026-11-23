@@ -21,6 +21,11 @@ FUNDS = [
         "fund_ccy": "EUR",
         "url": "https://www.eclecticacapital.com/eclectica-euro-cash-ucits-fund",
     },
+    {
+        "fund_name": "ECLECTICA BETA ONE",
+        "fund_ccy": "USD",
+        "url": "https://www.eclecticacapital.com/eclectica-beta-one",
+    },
 ]
 
 NBS_INDEX_BY_DATE_URL = "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/IndexByDate"
